@@ -27,7 +27,7 @@ var (
 	noMetrics, dummy                           bool
 	address                                    string
 	multiplier                                 float64
-	conditionsPath, hostTag, groupTag, userTag string
+	conditionsPath, hostTag, groupTag, didTag string
 	interval                                   time.Duration
 )
 
@@ -123,7 +123,7 @@ func chompAllInts(conn *telnet.Conn, command string) (values []int, err error) {
 
 	// find the ints
 	tmpStrings := matchInts.FindAllString(data, -1)
-	for _, v := range tmpStrings[1:] {
+	for _, v := range tmpStrings {
 		i, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
 			return values, err
@@ -142,7 +142,7 @@ func chompAllStrings(conn *telnet.Conn, command string) (values []string, err er
 
 	// find the ints
 	tmpStrings := matchStrings.FindAllString(data, -1)
-	values = tmpStrings[1:]
+	values = tmpStrings[1:] // discard first string coz "OK"
 	return
 }
 
@@ -231,13 +231,10 @@ func intToString(a []int) []string {
 	return b
 }
 
-func setMany(conn *telnet.Conn, values []float64) (err error) {
-	intVals := make([]int, len(values))
-	for i,x := range values{
-		intVals[i] = minMax(int(x*multiplier))
-	}
+func setMany(conn *telnet.Conn, values []int) (err error) {
+
 	command := "setWlsRelPower "
-	command += strings.Join(intToString(intVals), " ")
+	command += strings.Join(intToString(values), " ")
 
 	_, err = execCommand(conn, command)
 	return
@@ -246,7 +243,7 @@ func setMany(conn *telnet.Conn, values []float64) (err error) {
 func getPower(conn *telnet.Conn) (values []float64, err error) {
 	intValues, err := chompAllInts(conn, "getAllRelPower")
 	for _, v := range intValues{
-		values = append(values, float64(v)/multiplier)
+		values = append(values, float64(v))
 	}
 	return
 }
@@ -297,17 +294,30 @@ func runStuff(theTime time.Time, lineSplit []string) bool {
 	if len(lightValues) != minLength{
 		errLog.Println("Different number of light values than wavelengths")
 	}
+	intVals := make([]int, minLength)
+	for i,x := range lightValues{
+		intVals[i] = minMax(int(x*multiplier))
+	}
+	err = setMany(conn, intVals)
 
-	err = setMany(conn, lightValues[:minLength])
 	if err != nil{
 		errLog.Println(err)
 		return false
 	}
+	errLog.Println("scaling ", multiplier)
+	errLog.Println("ran ", theTime.Format("2006-01-02T15:04:05"), intVals)
 
-	errLog.Println("ran ", theTime.Format("2006-01-02T15:04:05"), lightValues)
+
+	time.Sleep(time.Millisecond*50)
+	returnedLv, err := getPower(conn)
+	if err != nil{
+		errLog.Println(err)
+		return false
+	}
+	errLog.Println("got ", theTime.Format("2006-01-02T15:04:05"), returnedLv)
 
 	for x := 0; x < 5; x++ {
-		if err := writeMetrics(wavelengths, lightValues); err != nil {
+		if err := writeMetrics(wavelengths, returnedLv); err != nil {
 			errLog.Println(err)
 			time.Sleep(200 * time.Millisecond)
 			continue
@@ -353,8 +363,8 @@ func writeMetrics(wavelengths []string, lightValues []float64) error {
 		if groupTag != "" {
 			m.AddTag("group", groupTag)
 		}
-		if userTag != "" {
-			m.AddTag("user", userTag)
+		if didTag != "" {
+			m.AddTag("did", didTag)
 		}
 
 		telegrafClient.Write(m)
@@ -410,9 +420,9 @@ func init() {
 		groupTag = tempV
 	}
 
-	flag.StringVar(&userTag, "user-tag", "", "user specified tag")
-	if tempV := os.Getenv("USER_TAG"); tempV != "" {
-		userTag = tempV
+	flag.StringVar(&didTag, "did-tag", "", "deliverable id tag")
+	if tempV := os.Getenv("DID_TAG"); tempV != "" {
+		didTag = tempV
 	}
 
 	flag.StringVar(&conditionsPath, "conditions", "", "conditions file to")
