@@ -65,13 +65,27 @@ examples:
 	%s -conditions GC03-conditions.csv -dummy 192.168.1.3 2>> GC03-error.log 1>> GC03.log
 
 quirks:
-	the first 3 or 4 columns are used for running the chamber:
-		date,time,temperature,humidity OR datetime,temperature,humidity
-		the second case only occurs if the first 8 characters of the file (0th header) is "datetime"
+channels are sequentially numbered as such in conditions file:
 
-	for the moment, the first line of the csv is technically (this is for your headers)
-	if both -dummy and -no-metrics are specified, this program will exit.
-
+	s7:
+		channel-1 400nm
+		channel-2 420nm
+		channel-3 450nm
+		channel-4 530nm
+		channel-5 630nm
+		channel-6 660nm
+		channel-7 735nm
+	s10:
+		channel-1 370nm
+		channel-2 400nm
+		channel-3 420nm
+		channel-4 450nm
+		channel-5 530nm
+		channel-6 620nm
+		channel-7 660nm
+		channel-8 735nm
+		channel-9 850nm
+		channel-10 6500k
 `
 	fmt.Printf(use, os.Args[0], os.Args[0], os.Args[0])
 }
@@ -160,10 +174,12 @@ func getWl(conn *telnet.Conn) (values []string, err error) {
 // runStuff, should send values and write metrics.
 // returns true if program should continue, false if program should retry
 func runStuff(theTime time.Time, lineSplit []string) bool {
-	stringVals := lineSplit[4:]
-	lightValues := make([]float64, len(stringVals))
 
-	for i, v := range stringVals {
+	lightValues := make([]float64, len(chamber_tools.IndexConfig.ChannelsIdx))
+
+
+	for i, idx := range chamber_tools.IndexConfig.ChannelsIdx {
+		v := lineSplit[idx]
 		found := matchFloat.FindString(v)
 		if len(found) < 0 {
 			errLog.Printf("couldnt parse %s as float.\n", v)
@@ -357,7 +373,9 @@ func init() {
 		errLog.Println("dummy and no-metrics specified, nothing to do.")
 		os.Exit(1)
 	}
-
+	if conditionsPath != "" && !dummy {
+		chamber_tools.InitIndexConfig(errLog, conditionsPath)
+	}
 	errLog.Printf("hostTag: \t%s\n", hostTag)
 	errLog.Printf("groupTag: \t%s\n", groupTag)
 	errLog.Printf("address: \t%s\n", address)
