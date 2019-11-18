@@ -31,7 +31,6 @@ stages:
 
 matrix:
   include:
-
     - stage: build amd64
       script:
         - >-
