@@ -1,4 +1,4 @@
-FROM moikot/golang-dep:master as build-env
+FROM --platform=$BUILDPLATFORM moikot/golang-dep as build-env
 
 ARG APP_FOLDER=/go/src/github.com/appf/controller-heliospectra/
 
