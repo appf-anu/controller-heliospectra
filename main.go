@@ -150,11 +150,16 @@ func intToString(a []int) []string {
 	return b
 }
 
+
 func setMany(conn *telnet.Conn, values []int) (err error) {
+	stringWls := strings.Join(intToString(values), " ")
+	command := fmt.Sprintf("setWlsRelPower %s", stringWls)
+	_, err = execCommand(conn, command)
+	return
+}
 
-	command := "setWlsRelPower "
-	command += strings.Join(intToString(values), " ")
-
+func setOne(conn *telnet.Conn, wl int, value int) (err error){
+	command := fmt.Sprintf("setWlRelPower %d %d", wl, value)
 	_, err = execCommand(conn, command)
 	return
 }
@@ -171,25 +176,8 @@ func getWl(conn *telnet.Conn) (values []string, err error) {
 
 // runStuff, should send values and write metrics.
 // returns true if program should continue, false if program should retry
-func runStuff(theTime time.Time, lineSplit []string) bool {
+func runStuff(point *chamber_tools.TimePoint) bool {
 
-	lightValues := make([]float64, len(chamber_tools.IndexConfig.ChannelsIdx))
-
-
-	for i, idx := range chamber_tools.IndexConfig.ChannelsIdx {
-		v := lineSplit[idx]
-		found := matchFloat.FindString(v)
-		if len(found) < 0 {
-			errLog.Printf("couldnt parse %s as float.\n", v)
-			continue
-		}
-		fl, err := strconv.ParseFloat(found, 64)
-		if err != nil {
-			errLog.Println(err)
-			continue
-		}
-		lightValues[i] = fl
-	}
 	conn, err := telnet.DialTimeout("tcp", address, time.Second*30)
 	if err != nil {
 		errLog.Println(err)
@@ -207,22 +195,53 @@ func runStuff(theTime time.Time, lineSplit []string) bool {
 		errLog.Println(err)
 		return false
 	}
-	minLength := chamber_tools.Min(len(wavelengths), len(lightValues))
-	if len(lightValues) != minLength {
+	minLength := chamber_tools.Min(len(wavelengths), len(point.Channels))
+	if len(point.Channels) < len(wavelengths){
+		errLog.Printf("Different number of light values in control file (%d) than wavelengths/channels for " +
+			"this light (%d)\n", len(point.Channels), len(wavelengths))
+		os.Exit(2)
+	}
+	if len(point.Channels) != minLength {
 		errLog.Println("Different number of light values than wavelengths")
+
 	}
 	intVals := make([]int, minLength)
-	for i, x := range lightValues {
+	negVal := false
+	for i, x := range point.Channels {
+		// multiply all the values by the multiplier.
+		// none of the heliospectras accept values over 1000
 		intVals[i] = chamber_tools.Clamp(int(x * multiplier), 0, 1000)
+		if x < 0 {
+			negVal = true
+		}
 	}
-	err = setMany(conn, intVals)
+	// handle negative / non-provided values
+	if negVal {
+		for i, wl := range wavelengths {
+			value := intVals[i] // use intVals for this, lights only accept ints
+			wlInt, err := strconv.Atoi(strings.TrimSpace(wl)) // get the wavelength as an int
+			if err != nil {
+				errLog.Printf("Couldn't set wl %s to %d\n", wl, value)
+				errLog.Println(err)
+				continue
+			}
+			err = setOne(conn, wlInt, value)
+			if err != nil {
+				errLog.Printf("Couldn't set wl %s to %d\n", wlInt, value)
+				errLog.Println(err)
+				continue
+			}
+		}
+	} else {
+		err = setMany(conn, intVals)
+		if err != nil {
+			errLog.Println(err)
+			return false
+		}
+	}
 
-	if err != nil {
-		errLog.Println(err)
-		return false
-	}
 	errLog.Println("scaling ", multiplier)
-	errLog.Println("ran ", theTime.Format("2006-01-02T15:04:05"), intVals)
+	errLog.Println("ran ", point.Datetime.Format("2006-01-02T15:04:05"), intVals)
 
 	time.Sleep(time.Millisecond * 50)
 	returnedLv, err := getPower(conn)
@@ -230,7 +249,7 @@ func runStuff(theTime time.Time, lineSplit []string) bool {
 		errLog.Println(err)
 		return false
 	}
-	errLog.Println("got ", theTime.Format("2006-01-02T15:04:05"), returnedLv)
+	errLog.Println("got ", point.Datetime.Format("2006-01-02T15:04:05"), returnedLv)
 
 	for x := 0; x < 5; x++ {
 		if err := writeMetrics(wavelengths, returnedLv); err != nil {
