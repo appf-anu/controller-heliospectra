@@ -197,34 +197,44 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 	}
 	minLength := chamber_tools.Min(len(wavelengths), len(point.Channels))
 	if len(point.Channels) < len(wavelengths){
-		errLog.Printf("Different number of light values in control file (%d) than wavelengths/channels for " +
-			"this light (%d)\n", len(point.Channels), len(wavelengths))
-		os.Exit(2)
+		errLog.Printf("Number of light values in control file (%d) less than wavelengths/channels for this " +
+			"light (%d), ignoring some channels.\n", len(point.Channels), len(wavelengths))
 	}
-	if len(point.Channels) != minLength {
-		errLog.Println("Different number of light values than wavelengths")
+	if len(point.Channels) > len(wavelengths) {
+		errLog.Printf("Number of light values in control file (%d) greater than wavelengths/channels for " +
+			"this light (%d), ignoring some channels.\n", len(point.Channels), len(wavelengths))
+	}
 
-	}
+	// make intvals the minimum length
 	intVals := make([]int, minLength)
 	negVal := false
-	for i, x := range point.Channels {
-		// multiply all the values by the multiplier.
-		// none of the heliospectras accept values over 1000
-		intVals[i] = chamber_tools.Clamp(int(x * multiplier), 0, 1000)
+	// iterate over the minimum length
+	for i, x := range intVals {
+		// multiply all the channel values by the multiplier.
+		// none of the heliospectras accept values over 1000, so clamp
+		intVals[i] = chamber_tools.Clamp(int(point.Channels[i] * multiplier), 0, 1000)
 		if x < 0 {
 			negVal = true
 		}
 	}
 	// handle negative / non-provided values
 	if negVal {
-		for i, wl := range wavelengths {
-			value := intVals[i] // use intVals for this, lights only accept ints
-			wlInt, err := strconv.Atoi(strings.TrimSpace(wl)) // get the wavelength as an int
+		for i, value := range intVals {
+			// skip negative values
+			if value < 0 {
+				continue
+			}
+
+			// get the wavelength as an int
+			wlInt, err := strconv.Atoi(strings.TrimSpace(wavelengths[i])) // get the wavelength as an int
 			if err != nil {
-				errLog.Printf("Couldn't set wl %s to %d\n", wl, value)
+				errLog.Printf("error converting wavelength value %s to int to set value %d\n",
+					wavelengths[i], value)
 				errLog.Println(err)
 				continue
 			}
+
+			// set the value
 			err = setOne(conn, wlInt, value)
 			if err != nil {
 				errLog.Printf("Couldn't set wl %s to %d\n", wlInt, value)
