@@ -209,11 +209,11 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 	intVals := make([]int, minLength)
 	negVal := false
 	// iterate over the minimum length
-	for i, x := range intVals {
+	for i, _ := range intVals {
 		// multiply all the channel values by the multiplier.
 		// none of the heliospectras accept values over 1000, so clamp
 		intVals[i] = chamber_tools.Clamp(int(point.Channels[i] * multiplier), 0, 1000)
-		if x < 0 {
+		if point.Channels[i] < 0 {
 			negVal = true
 		}
 	}
