@@ -142,8 +142,6 @@ func chompAllStrings(conn *telnet.Conn, command string) (values []string, err er
 	return
 }
 
-
-
 func intToString(a []int) []string {
 	b := make([]string, len(a))
 	for i, v := range a {
