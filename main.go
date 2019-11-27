@@ -251,7 +251,7 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 	}
 
 	errLog.Println("scaling ", multiplier)
-	errLog.Println("ran ", point.Datetime.Format("2006-01-02T15:04:05"), intVals)
+	errLog.Printf("ran %s %+v", point.Datetime.Format(time.RFC3339), intVals)
 
 	time.Sleep(time.Millisecond * 50)
 	returnedLv, err := getPower(conn)
@@ -260,7 +260,7 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 		return false
 	}
 	errLog.Println("got ", point.Datetime.Format("2006-01-02T15:04:05"), returnedLv)
-
+	errLog.Printf("ran %s %+v", point.Datetime.Format(time.RFC3339), returnedLv)
 	for x := 0; x < 5; x++ {
 		if err := writeMetrics(wavelengths, returnedLv); err != nil {
 			errLog.Println(err)
