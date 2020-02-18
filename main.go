@@ -184,9 +184,11 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 		return false
 	}
 	defer conn.Close()
+	// wait at least a second for the connection to init.
+	time.Sleep(time.Second*1)
 	err = conn.SkipUntil("\n>")
 	if err != nil {
-		errLog.Println(err)
+		errLog.Printf("Error getting heliospectra shell: %v\n", err)
 		return false
 	}
 
