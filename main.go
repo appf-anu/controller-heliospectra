@@ -211,19 +211,22 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 	intVals := make([]int, minLength)
 	negVal := false
 	// iterate over the minimum length
-	for i, _ := range intVals {
+	for i := range intVals {
 		// multiply all the channel values by the multiplier.
 		// none of the heliospectras accept values over 1000, so clamp
-		intVals[i] = chamber_tools.Clamp(int(point.Channels[i] * multiplier), 0, 1000)
-		if point.Channels[i] < 0 {
+		if point.Channels[i] == chamber_tools.NullTargetFloat64 || point.Channels[i] < 0 {
 			negVal = true
+			intVals[i] = chamber_tools.NullTargetInt
+			continue
 		}
+
+		intVals[i] = chamber_tools.Clamp(int(point.Channels[i] * multiplier), 0, 1000)
 	}
 	// handle negative / non-provided values
 	if negVal {
 		for i, value := range intVals {
 			// skip negative values
-			if value < 0 {
+			if value == chamber_tools.NullTargetInt || value < 0 {
 				continue
 			}
 
@@ -235,7 +238,8 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 				errLog.Println(err)
 				continue
 			}
-
+			// sleep for a bit we wait for the light to be ready
+			time.Sleep(time.Millisecond*200)
 			// set the value
 			err = setOne(conn, wlInt, value)
 			if err != nil {
@@ -261,8 +265,8 @@ func runStuff(point *chamber_tools.TimePoint) bool {
 		errLog.Println(err)
 		return false
 	}
-	errLog.Println("got ", point.Datetime.Format("2006-01-02T15:04:05"), returnedLv)
-	errLog.Printf("ran %s %+v", point.Datetime.Format(time.RFC3339), returnedLv)
+	errLog.Printf("got %s %+v", point.Datetime.Format(time.RFC3339), returnedLv)
+
 	for x := 0; x < 5; x++ {
 		if err := writeMetrics(wavelengths, returnedLv); err != nil {
 			errLog.Println(err)
@@ -414,13 +418,13 @@ func init() {
 
 func main() {
 	if !noMetrics && (conditionsPath == "" || dummy) {
-
 		runMetrics := func() {
 			conn, err := telnet.DialTimeout("tcp", address, time.Second*30)
 			if err != nil {
 				errLog.Println(err)
 			}
 			defer conn.Close()
+			time.Sleep(time.Second * 1)
 			err = conn.SkipUntil(">")
 			if err != nil {
 				errLog.Println(err)
@@ -457,5 +461,4 @@ func main() {
 	if conditionsPath != "" && !dummy {
 		chamber_tools.RunConditions(errLog, runStuff, conditionsPath, loopFirstDay)
 	}
-
 }
