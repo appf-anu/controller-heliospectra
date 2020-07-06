@@ -1,4 +1,7 @@
 # controller-heliospectra
+
+this repo is deprecated, old and archived, new repo ishere https://gitlab.com/appf-anu/controller-heliospectra2
+
 go controller for heliospectra s7 and s10 lights
 
 *multiplier* param and *MULTIPLIER* environment variable are used to change the value sent to the light
